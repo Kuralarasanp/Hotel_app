@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 from io import BytesIO
 
 # ============================================================
@@ -239,3 +239,4 @@ if uploaded_file:
             file_name="comparison_results_streamlit.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
