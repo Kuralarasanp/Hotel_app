@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
-from rapidfuzz import fuzz
 
 # ============================================================
 # CONFIG
@@ -73,9 +72,15 @@ if uploaded_file:
 
     df = df.dropna(subset=['No. of Rooms', 'Market Value-2024', '2024 VPR'])
 
-    # Map hotel class
+    # Map hotel class safely
     df["Hotel Class Mapped"] = df["Hotel Class"].apply(map_hotel_class)
-    df = df.dropna(subset=["Hotel Class Mapped"])
+    
+    # Keep only rows with valid mapping
+    invalid_rows = df[df["Hotel Class Mapped"] == ""]
+    if not invalid_rows.empty:
+        st.warning(f"{len(invalid_rows)} rows skipped due to invalid Hotel Class.")
+    
+    df = df[df["Hotel Class Mapped"] != ""]
     df["Hotel Class Mapped"] = df["Hotel Class Mapped"].astype(int)
 
     st.success("File uploaded successfully!")
@@ -126,7 +131,6 @@ if uploaded_file:
                 least = remaining.sort_values("2024 VPR").head(1)
                 remaining = remaining.drop(least.index)
                 top = remaining.sort_values("2024 VPR", ascending=False).head(1)
-
                 selected = pd.concat([nearest, least, top]).head(5)
             else:
                 selected = pd.DataFrame()
@@ -159,17 +163,13 @@ if uploaded_file:
                 if idx < len(selected):
                     result_row = selected.iloc[idx]
                     for col in match_columns:
-                        if col == "Hotel Class":
-                            row_data[f"Result{idx+1}_{col}"] = safe_excel_value(result_row[col])
-                        else:
-                            row_data[f"Result{idx+1}_{col}"] = safe_excel_value(result_row[col])
+                        row_data[f"Result{idx+1}_{col}"] = safe_excel_value(result_row[col])
                 else:
                     for col in match_columns:
                         row_data[f"Result{idx+1}_{col}"] = ""
 
             df_out_rows.append(row_data)
 
-        # Convert to dataframe
         final_df = pd.DataFrame(df_out_rows)
 
         # Save to in-memory Excel
