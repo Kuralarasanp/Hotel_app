@@ -73,10 +73,10 @@ def get_nearest_three(df, mv, vpr):
     return df.sort_values("dist").head(3).drop(columns="dist")
 
 def get_least_one(df):
-    return df.sort_values(["Market Value-2024","2024 VPR"], ascending=[True,True]).head(1)
+    return df.sort_values(["Market Value-2024","2024 VPR"], ascending=True).head(1)
 
 def get_top_one(df):
-    return df.sort_values(["Market Value-2024","2024 VPR"], ascending=[False,False]).head(1)
+    return df.sort_values(["Market Value-2024","2024 VPR"], ascending=False).head(1)
 
 # ============================================================
 # STREAMLIT UI
@@ -106,6 +106,7 @@ if uploaded_file:
 
     if st.button("Generate Comparison Excel"):
         output = BytesIO()
+
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
             worksheet = workbook.add_worksheet("Comparison Results")
@@ -114,24 +115,28 @@ if uploaded_file:
             # Formats
             header = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#D9E1F2'})
             border = workbook.add_format({'border': 1})
-            currency0 = workbook.add_format({'num_format': '$#,##0', 'border': 1})
-            currency2 = workbook.add_format({'num_format': '$#,##0.00', 'border': 1})
+            currency0 = workbook.add_format({'num_format': '$#,##0', 'border': 1'})
+            currency2 = workbook.add_format({'num_format': '$#,##0.00', 'border': 1'})
 
             match_columns = [
                 'Property Address', 'State', 'Property County', 'Project / Hotel Name',
                 'Owner Name/ LLC Name', 'No. of Rooms', 'Market Value-2024',
                 '2024 VPR', 'Hotel Class', 'Hotel Class Number'
             ]
+
             all_columns = list(df.columns)
             max_results_per_row = 5
+
             row = 0
             status_col = len(match_columns)
 
-            # Header row
+            # ---------------- HEADER ----------------
             for c, name in enumerate(match_columns):
                 worksheet.write(row, c, name, header)
+
             worksheet.write(row, status_col, "Matching Results Count / Status", header)
             worksheet.write(row, status_col + 1, "OverPaid", header)
+
             col = status_col + 2
             for r in range(1, max_results_per_row + 1):
                 for colname in all_columns:
@@ -140,14 +145,16 @@ if uploaded_file:
                     col += 1
                 worksheet.write(row, col, f"Result{r}_Hotel Class Number", header)
                 col += 1
+
             row += 1
 
-            # MAIN LOOP
+            # ---------------- MAIN LOGIC ----------------
             for i in range(len(df)):
                 base = df.iloc[i]
                 mv = base['Market Value-2024']
                 vpr = base['2024 VPR']
                 rooms = base["No. of Rooms"]
+
                 subset = df[df.index != i]
 
                 allowed = {
@@ -174,8 +181,7 @@ if uploaded_file:
                 # Write base row
                 for c, colname in enumerate(match_columns):
                     if colname == "Hotel Class Number":
-                        val = base["Hotel Class Order"]
-                        worksheet.write(row, c, safe_excel_value(val), border)
+                        worksheet.write(row, c, safe_excel_value(base["Hotel Class Order"]), border)
                     else:
                         val = safe_excel_value(base[colname])
                         if colname == "Market Value-2024":
@@ -187,10 +193,13 @@ if uploaded_file:
 
                 if not matches.empty:
                     nearest = get_nearest_three(matches, mv, vpr)
-                    rem = matches.drop(nearest.index)
-                    least = get_least_one(rem)
-                    rem = rem.drop(least.index)
-                    top = get_top_one(rem)
+                    remaining = matches.drop(nearest.index)
+
+                    least = get_least_one(remaining)
+                    remaining = remaining.drop(least.index)
+
+                    top = get_top_one(remaining)
+
                     selected = pd.concat([nearest, least, top]).head(5).reset_index(drop=True)
 
                     worksheet.write(row, status_col, f"Total: {len(matches)} | Selected: {len(selected)}", border)
@@ -200,6 +209,7 @@ if uploaded_file:
                     assessed = median_vpr * rooms * state_rate
                     subject_tax = mv * state_rate
                     overpaid = subject_tax - assessed
+
                     worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
 
                     col = status_col + 2
@@ -208,6 +218,7 @@ if uploaded_file:
                             row_df = selected.iloc[r]
                             for colname in all_columns:
                                 val = safe_excel_value(row_df[colname])
+
                                 if colname == "Market Value-2024":
                                     worksheet.write(row, col, val, currency0)
                                 elif colname == "2024 VPR":
@@ -227,11 +238,13 @@ if uploaded_file:
                 else:
                     worksheet.write(row, status_col, "No_Match_Case", border)
                     worksheet.write(row, status_col + 1, "", border)
+
                 row += 1
 
             worksheet.freeze_panes(1,0)
-            writer.save()
-            processed_data = output.getvalue()
+
+        # AFTER THE WITH BLOCK → FILE IS SAVED AUTOMATICALLY
+        processed_data = output.getvalue()
 
         st.download_button(
             label="📥 Download Processed Excel",
@@ -239,4 +252,3 @@ if uploaded_file:
             file_name="comparison_results_streamlit.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
