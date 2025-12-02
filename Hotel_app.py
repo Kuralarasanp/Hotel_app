@@ -42,9 +42,10 @@ state_tax_rates = {
     'Kansas': 0.0133, 'Kentucky': 0.0080, 'Louisiana': 0.0000, 'Massachusetts': 0.0112,
     'Maryland': 0.0109, 'Michigan': 0.0154, 'Missouri': 0.0097, 'Mississippi': 0.0075,
     'Montana': 0.0084, 'North Carolina': 0.0077, 'Nebraska': 0.0173, 'New Jersey': 0.0249,
-    'New Mexico': 0.0080, 'Nevada': 0.0060, 'Newyork': 0.0172, 'Ohio': 0.0157, 'Oklahoma': 0.0090,
-    'Oregon': 0.0097, 'Pennsylvania': 0.0158, 'South Carolina': 0.0057, 'Tennessee': 0.0071,
-    'Texas': 0.0250, 'Utah': 0.0057, 'Virginia': 0.0082, 'Washington': 0.0098
+    'New Mexico': 0.0080, 'Nevada': 0.0060, 'Newyork': 0.0172, 'Ohio': 0.0157,
+    'Oklahoma': 0.0090, 'Oregon': 0.0097, 'Pennsylvania': 0.0158, 'South Carolina': 0.0057,
+    'Tennessee': 0.0071, 'Texas': 0.0250, 'Utah': 0.0057, 'Virginia': 0.0082,
+    'Washington': 0.0098
 }
 
 def get_state_tax_rate(state):
@@ -73,10 +74,10 @@ def get_nearest_three(df, mv, vpr):
     return df.sort_values("dist").head(3).drop(columns="dist")
 
 def get_least_one(df):
-    return df.sort_values(["Market Value-2024","2024 VPR"], ascending=True).head(1)
+    return df.sort_values(["Market Value-2024", "2024 VPR"], ascending=[True, True]).head(1)
 
 def get_top_one(df):
-    return df.sort_values(["Market Value-2024","2024 VPR"], ascending=False).head(1)
+    return df.sort_values(["Market Value-2024", "2024 VPR"], ascending=[False, False]).head(1)
 
 # ============================================================
 # STREAMLIT UI
@@ -106,7 +107,6 @@ if uploaded_file:
 
     if st.button("Generate Comparison Excel"):
         output = BytesIO()
-
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
             worksheet = workbook.add_worksheet("Comparison Results")
@@ -115,25 +115,22 @@ if uploaded_file:
             # Formats
             header = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#D9E1F2'})
             border = workbook.add_format({'border': 1})
-            currency0 = workbook.add_format({'num_format': '$#,##0', 'border': 1'})
-            currency2 = workbook.add_format({'num_format': '$#,##0.00', 'border': 1'})
+            currency0 = workbook.add_format({'num_format': '$#,##0', 'border': 1})
+            currency2 = workbook.add_format({'num_format': '$#,##0.00', 'border': 1})
 
             match_columns = [
                 'Property Address', 'State', 'Property County', 'Project / Hotel Name',
                 'Owner Name/ LLC Name', 'No. of Rooms', 'Market Value-2024',
                 '2024 VPR', 'Hotel Class', 'Hotel Class Number'
             ]
-
             all_columns = list(df.columns)
             max_results_per_row = 5
-
             row = 0
             status_col = len(match_columns)
 
-            # ---------------- HEADER ----------------
+            # Header row
             for c, name in enumerate(match_columns):
                 worksheet.write(row, c, name, header)
-
             worksheet.write(row, status_col, "Matching Results Count / Status", header)
             worksheet.write(row, status_col + 1, "OverPaid", header)
 
@@ -145,16 +142,14 @@ if uploaded_file:
                     col += 1
                 worksheet.write(row, col, f"Result{r}_Hotel Class Number", header)
                 col += 1
-
             row += 1
 
-            # ---------------- MAIN LOGIC ----------------
+            # MAIN LOOP
             for i in range(len(df)):
                 base = df.iloc[i]
                 mv = base['Market Value-2024']
                 vpr = base['2024 VPR']
                 rooms = base["No. of Rooms"]
-
                 subset = df[df.index != i]
 
                 allowed = {
@@ -181,7 +176,8 @@ if uploaded_file:
                 # Write base row
                 for c, colname in enumerate(match_columns):
                     if colname == "Hotel Class Number":
-                        worksheet.write(row, c, safe_excel_value(base["Hotel Class Order"]), border)
+                        val = base["Hotel Class Order"]
+                        worksheet.write(row, c, safe_excel_value(val), border)
                     else:
                         val = safe_excel_value(base[colname])
                         if colname == "Market Value-2024":
@@ -193,13 +189,10 @@ if uploaded_file:
 
                 if not matches.empty:
                     nearest = get_nearest_three(matches, mv, vpr)
-                    remaining = matches.drop(nearest.index)
-
-                    least = get_least_one(remaining)
-                    remaining = remaining.drop(least.index)
-
-                    top = get_top_one(remaining)
-
+                    rem = matches.drop(nearest.index)
+                    least = get_least_one(rem)
+                    rem = rem.drop(least.index)
+                    top = get_top_one(rem)
                     selected = pd.concat([nearest, least, top]).head(5).reset_index(drop=True)
 
                     worksheet.write(row, status_col, f"Total: {len(matches)} | Selected: {len(selected)}", border)
@@ -209,7 +202,6 @@ if uploaded_file:
                     assessed = median_vpr * rooms * state_rate
                     subject_tax = mv * state_rate
                     overpaid = subject_tax - assessed
-
                     worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
 
                     col = status_col + 2
@@ -218,7 +210,6 @@ if uploaded_file:
                             row_df = selected.iloc[r]
                             for colname in all_columns:
                                 val = safe_excel_value(row_df[colname])
-
                                 if colname == "Market Value-2024":
                                     worksheet.write(row, col, val, currency0)
                                 elif colname == "2024 VPR":
@@ -241,9 +232,8 @@ if uploaded_file:
 
                 row += 1
 
-            worksheet.freeze_panes(1,0)
+            worksheet.freeze_panes(1, 0)
 
-        # AFTER THE WITH BLOCK → FILE IS SAVED AUTOMATICALLY
         processed_data = output.getvalue()
 
         st.download_button(
