@@ -1,39 +1,38 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+from rapidfuzz import fuzz
+import io
 
- import streamlit as st
-... import pandas as pd
-... import numpy as np
-... from rapidfuzz import fuzz
-... import io
-... 
-... # ============================================================
-... # PAGE HEADER
-... # ============================================================
-... st.set_page_config(page_title="Hotel Comparison Tool", layout="wide")
-... st.title("🏨 Hotel Market Value Comparison Tool")
-... st.write("Upload your Excel file, process matching logic, and download results.")
-... 
-... # ============================================================
-... # CONFIG — TOLERANCE SETTINGS
-... # ============================================================
-... MV_TOLERANCE = 0.20   # 20%
-... 
-... # ============================================================
-... # SAFE VALUE FOR EXCEL
-... # ============================================================
-... def safe_excel_value(val):
-...     try:
-...         if pd.isna(val) or (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
-...             return ""
-...         return val
-...     except:
-...         return ""
-... 
-... # ============================================================
-... # FUZZY MATCH FUNCTION
-... # ============================================================
-... def fuzzy_match(val, query, threshold=90):
-...     if pd.isna(val):
-...         return False
+# ============================================================
+# PAGE HEADER
+# ============================================================
+st.set_page_config(page_title="Hotel Comparison Tool", layout="wide")
+st.title("🏨 Hotel Market Value Comparison Tool")
+st.write("Upload your Excel file, process matching logic, and download results.")
+
+# ============================================================
+# CONFIG — TOLERANCE SETTINGS
+# ============================================================
+MV_TOLERANCE = 0.20   # 20%
+
+# ============================================================
+# SAFE VALUE FOR EXCEL
+# ============================================================
+def safe_excel_value(val):
+    try:
+        if pd.isna(val) or (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
+            return ""
+        return val
+    except:
+        return ""
+
+# ============================================================
+# FUZZY MATCH FUNCTION
+# ============================================================
+def fuzzy_match(val, query, threshold=90):
+    if pd.isna(val):
+        return False
     return fuzz.partial_ratio(str(val).lower(), str(query).lower()) >= threshold
 
 # ============================================================
