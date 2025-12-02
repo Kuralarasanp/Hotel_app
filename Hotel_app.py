@@ -2,32 +2,28 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
+from rapidfuzz import fuzz
 
 # ============================================================
 # CONFIG
 # ============================================================
-MV_TOLERANCE = 0.20   # 20% Market Value tolerance
+MV_TOLERANCE = 0.20   # 20%
 
 st.set_page_config(page_title="Hotel Comparison Engine", layout="wide")
-st.title("🏨 Hotel Market Value Comparison Tool")
-st.write("Upload your Excel file, process matching logic, and download results.")
+
+st.title("🏨 Hotel Comparison Engine")
+st.subheader("Upload your Excel file to generate comparison results")
 
 # ============================================================
-# HOTEL CLASS MAPPING
+# SAFE VALUE FOR EXCEL
 # ============================================================
-hotel_class_map = {
-    "Budget (Low End)": 1,
-    "Economy (Name Brand)": 2,
-    "Midscale": 3,
-    "Upper Midscale": 4,
-    "Upscale": 5,
-    "Upper Upscale First Class": 6,
-    "Luxury Class": 7,
-    "Independent Hotel": 8
-}
-
-def map_hotel_class(value):
-    return hotel_class_map.get(str(value).strip(), "")
+def safe_excel_value(val):
+    try:
+        if pd.isna(val) or (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
+            return ""
+        return val
+    except:
+        return ""
 
 # ============================================================
 # STATE TAX RATES
@@ -47,45 +43,42 @@ def get_state_tax_rate(state):
     return state_tax_rates.get(state, 0)
 
 # ============================================================
-# SAFE VALUE FOR EXCEL
-# ============================================================
-def safe_excel_value(val):
-    try:
-        if pd.isna(val) or (isinstance(val, float) and (np.isnan(val) or np.isinf(val))):
-            return ""
-        return val
-    except:
-        return ""
-
-# ============================================================
 # FILE UPLOAD
 # ============================================================
-uploaded_file = st.file_uploader("Upload Excel File", type=["xlsx"])
+uploaded = st.file_uploader("Choose Excel File", type=["xlsx"])
 
-if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+if uploaded:
+    df = pd.read_excel(uploaded)
     df.columns = [col.strip() for col in df.columns]
 
-    # Convert numeric columns
+    # Convert numbers
     for col in ['No. of Rooms', 'Market Value-2024', '2024 VPR']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
     df = df.dropna(subset=['No. of Rooms', 'Market Value-2024', '2024 VPR'])
 
-    # Map hotel class safely
-    df["Hotel Class Mapped"] = df["Hotel Class"].apply(map_hotel_class)
-    
-    # Keep only rows with valid mapping
-    invalid_rows = df[df["Hotel Class Mapped"] == ""]
-    if not invalid_rows.empty:
-        st.warning(f"{len(invalid_rows)} rows skipped due to invalid Hotel Class.")
-    
-    df = df[df["Hotel Class Mapped"] != ""]
-    df["Hotel Class Mapped"] = df["Hotel Class Mapped"].astype(int)
+    hotel_class_map = {
+        "Budget (Low End)": 1,
+        "Economy (Name Brand)": 2,
+        "Midscale": 3,
+        "Upper Midscale": 4,
+        "Upscale": 5,
+        "Upper Upscale First Class": 6,
+        "Luxury Class": 7,
+        "Independent Hotel": 8
+    }
+
+    df["Hotel Class Order"] = df["Hotel Class"].map(hotel_class_map)
+    df = df.dropna(subset=["Hotel Class Order"])
+    df["Hotel Class Order"] = df["Hotel Class Order"].astype(int)
 
     st.success("File uploaded successfully!")
 
-    if st.button("Process File"):
+    # ============================================================
+    # PROCESS BUTTON
+    # ============================================================
+    if st.button("⚙️ Process File"):
+
         st.info("Processing... please wait...")
 
         match_columns = [
@@ -101,14 +94,13 @@ if uploaded_file:
             mv = base['Market Value-2024']
             vpr = base['2024 VPR']
             rooms = base["No. of Rooms"]
-            hotel_class_order = base["Hotel Class Mapped"]
 
             subset = df[df.index != i]
 
             allowed = {
                 1:[1,2,3],2:[1,2,3,4],3:[2,3,4,5],4:[3,4,5,6],
                 5:[4,5,6,7],6:[5,6,7,8],7:[6,7,8],8:[7,8]
-            }.get(hotel_class_order, [])
+            }.get(base["Hotel Class Order"], [])
 
             mv_min = mv * (1 - MV_TOLERANCE)
             mv_max = mv * (1 + MV_TOLERANCE)
@@ -119,37 +111,40 @@ if uploaded_file:
                 (subset['No. of Rooms'] < rooms) &
                 (subset['Market Value-2024'].between(mv_min, mv_max)) &
                 (subset['2024 VPR'] < vpr) &
-                (subset['Hotel Class Mapped'].isin(allowed))
+                (subset['Hotel Class Order'].isin(allowed))
             )
 
             matches = subset[mask]
 
-            # Select top 5 matches
+            # =============== SELECT TOP 5 ===============
             if not matches.empty:
                 nearest = matches.sort_values("2024 VPR").head(3)
                 remaining = matches.drop(nearest.index)
                 least = remaining.sort_values("2024 VPR").head(1)
                 remaining = remaining.drop(least.index)
                 top = remaining.sort_values("2024 VPR", ascending=False).head(1)
+
                 selected = pd.concat([nearest, least, top]).head(5)
             else:
                 selected = pd.DataFrame()
 
-            # Build output row
+            # =============== FORMAT FINAL OUTPUT ===============
             row_data = {}
+
             for col in match_columns:
                 row_data[col] = safe_excel_value(base[col])
 
-            # Matching status
+            # Status
             if not matches.empty:
                 row_data["Matching Results Count / Status"] = f"Total: {len(matches)} | Selected: {len(selected)}"
             else:
                 row_data["Matching Results Count / Status"] = "No_Match_Case"
 
-            # OverPaid calculation
+            # OverPaid
             if not matches.empty:
                 median_vpr = selected["2024 VPR"].head(3).median()
                 state_rate = get_state_tax_rate(base["State"])
+
                 assessed = median_vpr * rooms * state_rate
                 subject_tax = mv * state_rate
                 overpaid = subject_tax - assessed
@@ -158,7 +153,7 @@ if uploaded_file:
 
             row_data["OverPaid"] = safe_excel_value(overpaid)
 
-            # Add top 5 results with Hotel Class
+            # Add results
             for idx in range(5):
                 if idx < len(selected):
                     result_row = selected.iloc[idx]
@@ -172,7 +167,7 @@ if uploaded_file:
 
         final_df = pd.DataFrame(df_out_rows)
 
-        # Save to in-memory Excel
+        # =============== EXPORT ===============
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
             final_df.to_excel(writer, sheet_name="Comparison Results", index=False)
@@ -185,3 +180,4 @@ if uploaded_file:
             file_name="comparison_results_final.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
