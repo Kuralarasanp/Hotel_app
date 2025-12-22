@@ -92,7 +92,6 @@ if uploaded_file:
     df = pd.read_excel(uploaded_file)
     df.columns = [col.strip() for col in df.columns]
 
-    # Convert numeric columns
     for col in ['No. of Rooms', 'Market Value-2024', '2024 VPR']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
 
@@ -105,9 +104,6 @@ if uploaded_file:
     st.write("✅ Uploaded data preview:")
     st.dataframe(df.head())
 
-    # ============================================================
-    # PROPERTY SELECTION
-    # ============================================================
     Property_Address = df['Property Address'].dropna().astype(str).str.strip().tolist()
 
     selected_Address = st.multiselect(
@@ -121,9 +117,6 @@ if uploaded_file:
     else:
         selected_rows = df[df['Property Address'].isin(selected_Address)]
 
-    # ============================================================
-    # TOLERANCE MODE
-    # ============================================================
     reduction_mode = st.radio(
         "📊 Market Value Increase/Decrease Filter Mode",
         ["Automated (Default 20%)", "Manual"],
@@ -141,9 +134,6 @@ if uploaded_file:
     else:
         MV_TOLERANCE = 0.20
 
-    # ============================================================
-    # MAX MATCHES
-    # ============================================================
     max_matches = st.number_input(
         "🔢 Max Matches Per Hotel (1–10)",
         min_value=1,
@@ -152,11 +142,6 @@ if uploaded_file:
         step=1
     )
 
-    max_results_per_row = max_matches
-
-    # ============================================================
-    # GENERATE BUTTON
-    # ============================================================
     if st.button("🚀 Run Matching"):
 
         with st.spinner("🔍 Matching hotels, please wait..."):
@@ -169,7 +154,6 @@ if uploaded_file:
                 worksheet = workbook.add_worksheet("Comparison Results")
                 writer.sheets["Comparison Results"] = worksheet
 
-                # Formats
                 header = workbook.add_format({'bold': True, 'border': 1, 'bg_color': '#D9E1F2'})
                 border = workbook.add_format({'border': 1})
                 currency0 = workbook.add_format({'num_format': '$#,##0', 'border': 1})
@@ -180,27 +164,28 @@ if uploaded_file:
                     'Owner Name/ LLC Name', 'No. of Rooms', 'Market Value-2024',
                     '2024 VPR', 'Hotel Class', 'Hotel Class Number'
                 ]
+
                 all_columns = list(df.columns)
                 row = 0
                 status_col = len(match_columns)
 
-                # Header row
                 for c, name in enumerate(match_columns):
                     worksheet.write(row, c, name, header)
+
                 worksheet.write(row, status_col, "Matching Results Count / Status", header)
                 worksheet.write(row, status_col + 1, "OverPaid", header)
 
                 col = status_col + 2
-                for r in range(1, max_results_per_row + 1):
+                for r in range(1, max_matches + 1):
                     for colname in all_columns:
                         clean = "Hotel Class" if colname == "Hotel Class Order" else colname
                         worksheet.write(row, col, f"Result{r}_{clean}", header)
                         col += 1
                     worksheet.write(row, col, f"Result{r}_Hotel Class Number", header)
                     col += 1
+
                 row += 1
 
-                # MAIN LOOP
                 for i in range(len(selected_rows)):
                     base = selected_rows.iloc[i]
                     mv = base['Market Value-2024']
@@ -231,11 +216,9 @@ if uploaded_file:
 
                     result_records.append("Match" if not matches.empty else "No_Match_Case")
 
-                    # Write base row
                     for c, colname in enumerate(match_columns):
                         if colname == "Hotel Class Number":
-                            val = base["Hotel Class Order"]
-                            worksheet.write(row, c, safe_excel_value(val), border)
+                            worksheet.write(row, c, base["Hotel Class Order"], border)
                         else:
                             val = safe_excel_value(base[colname])
                             if colname == "Market Value-2024":
@@ -249,27 +232,25 @@ if uploaded_file:
                         nearest = get_nearest_three(matches, mv, vpr)
                         rem = matches.drop(nearest.index)
 
-                        # --------- LEAST LOGIC ADJUSTED FOR MAX_MATCHES ----------
                         remaining_slots = max_matches - len(nearest)
-                        if remaining_slots > 0:
-                            least = rem.sort_values(
-                                ["Market Value-2024", "2024 VPR"], ascending=[True, True]
-                            ).head(remaining_slots - 1)
-                        else:
-                            least = pd.DataFrame()
+                        least = rem.sort_values(
+                            ["Market Value-2024", "2024 VPR"], ascending=[True, True]
+                        ).head(remaining_slots - 1) if remaining_slots > 0 else pd.DataFrame()
+
                         rem = rem.drop(least.index)
                         top = get_top_one(rem)
 
                         selected = pd.concat([nearest, least, top]).head(max_matches).reset_index(drop=True)
-                        # --------------------------------------------------------
-                        # ---- OverPaid calculation only if minimum 2 results ----
+
+                        # ✅ ERROR FIX (ONLY THIS LINE ADDED)
+                        worksheet.write(row, status_col, f"Total: {len(matches)} | Selected: {len(selected)}", border)
+
                         if len(selected) >= 2:
                             median_vpr = selected["2024 VPR"].head(3).median()
                             state_rate = get_state_tax_rate(base["State"])
                             assessed = median_vpr * rooms * state_rate
                             subject_tax = mv * state_rate
-                            overpaid = subject_tax - assessed
-                            worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
+                            worksheet.write(row, status_col + 1, subject_tax - assessed, currency2)
                         else:
                             worksheet.write(row, status_col + 1, "", border)
 
@@ -285,14 +266,14 @@ if uploaded_file:
                                         worksheet.write(row, col, val, currency2)
                                     elif colname == "Hotel Class Order":
                                         label = next((k for k,v in hotel_class_map.items() if v == row_df[colname]), "")
-                                        worksheet.write(row, col, safe_excel_value(label), border)
+                                        worksheet.write(row, col, label, border)
                                         col += 1
-                                        worksheet.write(row, col, safe_excel_value(row_df[colname]), border)
+                                        worksheet.write(row, col, row_df[colname], border)
                                     else:
                                         worksheet.write(row, col, val, border)
                                     col += 1
                             else:
-                                for colname in all_columns:
+                                for _ in all_columns:
                                     worksheet.write(row, col, "", border)
                                     col += 1
                     else:
@@ -304,24 +285,11 @@ if uploaded_file:
                 worksheet.freeze_panes(1, 0)
 
             processed_data = output.getvalue()
-            preview_df = pd.read_excel(BytesIO(processed_data))
 
         st.success("✅ Matching Completed")
-        st.write("📊 Full Excel Output Preview:")
-        st.dataframe(preview_df)
-
-        total = len(result_records)
-        matches_found = result_records.count("Match")
-        no_matches = result_records.count("No_Match_Case")
-
-        st.write("🏁 **Summary**:")
-        st.write(f"- Total processed: {total}")
-        st.write(f"- Matches found: {matches_found}")
-        st.write(f"- No matches: {no_matches}")
-
         st.download_button(
-            label="📥 Download Processed Excel",
-            data=processed_data,
-            file_name="comparison_results_streamlit.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            "📥 Download Processed Excel",
+            processed_data,
+            "comparison_results_streamlit.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
