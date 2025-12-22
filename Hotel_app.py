@@ -245,7 +245,7 @@ if uploaded_file:
                             else:
                                 worksheet.write(row, c, val, border)
 
-                    if not matches.empty:
+                    if not matches.empty and len(matches) >= 2:  # MODIFIED: Only calculate if minimum 2 matches
                         nearest = get_nearest_three(matches, mv, vpr)
                         rem = matches.drop(nearest.index)
 
@@ -265,18 +265,13 @@ if uploaded_file:
 
                         worksheet.write(row, status_col, f"Total: {len(matches)} | Selected: {len(selected)}", border)
 
-                        # ---- OverPaid calculation only if matches >= 2 ----
-                        if len(matches) >= 2:
-                            median_vpr = selected["2024 VPR"].head(3).median()
-                            if pd.isna(median_vpr):  # if all values are NaN
-                                median_vpr = 0
-                            state_rate = get_state_tax_rate(base["State"])
-                            assessed = median_vpr * rooms * state_rate
-                            subject_tax = mv * state_rate
-                            overpaid = subject_tax - assessed
-                            worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
-                        else:
-                            worksheet.write(row, status_col + 1, "", border)  # leave blank if less than 2 matches
+                        # MODIFIED: Use minimum VPR from all matches (minimum 2) for overpaid calculation
+                        min_vpr = matches["2024 VPR"].min()
+                        state_rate = get_state_tax_rate(base["State"])
+                        assessed = min_vpr * rooms * state_rate
+                        subject_tax = mv * state_rate
+                        overpaid = subject_tax - assessed
+                        worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
 
                         col = status_col + 2
                         for r in range(max_matches):
@@ -301,7 +296,7 @@ if uploaded_file:
                                     worksheet.write(row, col, "", border)
                                     col += 1
                     else:
-                        worksheet.write(row, status_col, "No_Match_Case", border)
+                        worksheet.write(row, status_col, "No_Match_Case" if matches.empty else f"Insufficient_Matches: {len(matches)}", border)
                         worksheet.write(row, status_col + 1, "", border)
 
                     row += 1
@@ -330,6 +325,3 @@ if uploaded_file:
             file_name="comparison_results_streamlit.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
-
-
