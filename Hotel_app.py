@@ -245,7 +245,7 @@ if uploaded_file:
                             else:
                                 worksheet.write(row, c, val, border)
 
-                    if not matches.empty and len(matches) >= 2:  # MODIFIED: Only calculate if minimum 2 matches
+                    if not matches.empty:
                         nearest = get_nearest_three(matches, mv, vpr)
                         rem = matches.drop(nearest.index)
 
@@ -264,14 +264,16 @@ if uploaded_file:
                         # --------------------------------------------------------
 
                         worksheet.write(row, status_col, f"Total: {len(matches)} | Selected: {len(selected)}", border)
-
-                        # MODIFIED: Use minimum VPR from all matches (minimum 2) for overpaid calculation
-                        min_vpr = matches["2024 VPR"].min()
-                        state_rate = get_state_tax_rate(base["State"])
-                        assessed = min_vpr * rooms * state_rate
-                        subject_tax = mv * state_rate
-                        overpaid = subject_tax - assessed
-                        worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
+                        if len(select) >= 2:
+                            median_vpr = selected["2024 VPR"].head(3).median()
+                            state_rate = get_state_tax_rate(base["State"])
+                            assessed = median_vpr * rooms * state_rate
+                            subject_tax = mv * state_rate
+                            overpaid = subject_tax - assessed
+                            worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
+                        else:
+                            worksheet.write(row, status_col + 1, "", border)
+                        
 
                         col = status_col + 2
                         for r in range(max_matches):
@@ -296,7 +298,7 @@ if uploaded_file:
                                     worksheet.write(row, col, "", border)
                                     col += 1
                     else:
-                        worksheet.write(row, status_col, "No_Match_Case" if matches.empty else f"Insufficient_Matches: {len(matches)}", border)
+                        worksheet.write(row, status_col, "No_Match_Case", border)
                         worksheet.write(row, status_col + 1, "", border)
 
                     row += 1
