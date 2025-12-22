@@ -270,7 +270,7 @@ if uploaded_file:
                             assessed = median_vpr * rooms * state_rate
                             subject_tax = mv * state_rate
                             overpaid = subject_tax - assessed
-                            worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
+                            worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency0)
                         else:
                             worksheet.write(row, status_col + 1, "", border)
                         
@@ -327,4 +327,5 @@ if uploaded_file:
             file_name="comparison_results_streamlit.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
 
