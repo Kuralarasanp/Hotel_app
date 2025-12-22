@@ -264,7 +264,7 @@ if uploaded_file:
                         # --------------------------------------------------------
 
                         worksheet.write(row, status_col, f"Total: {len(matches)} | Selected: {len(selected)}", border)
-                        if len(select) >= 2:
+                        if len(selected) >= 2:
                             median_vpr = selected["2024 VPR"].head(3).median()
                             state_rate = get_state_tax_rate(base["State"])
                             assessed = median_vpr * rooms * state_rate
@@ -327,3 +327,4 @@ if uploaded_file:
             file_name="comparison_results_streamlit.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
