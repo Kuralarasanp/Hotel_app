@@ -274,7 +274,7 @@ if uploaded_file:
                             overpaid = subject_tax - assessed
                             worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
                         else:
-                            worksheet.write(row, status_col + 1, "", border)
+                            worksheet.write(row, status_col + 1, 0, currency2)
 
                         col = status_col + 2
                         for r in range(max_matches):
@@ -328,3 +328,4 @@ if uploaded_file:
             file_name="comparison_results_streamlit.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
