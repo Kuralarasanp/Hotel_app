@@ -265,8 +265,8 @@ if uploaded_file:
 
                         worksheet.write(row, status_col, f"Total: {len(matches)} | Selected: {len(selected)}", border)
 
-                        # ---- Overpaid calculation ONLY if match count > 2 ----
-                        if len(matches) > 2:
+                        # ---- OverPaid calculation only if matches >= 2 ----
+                        if len(matches) >= 2:
                             median_vpr = selected["2024 VPR"].head(3).median()
                             state_rate = get_state_tax_rate(base["State"])
                             assessed = median_vpr * rooms * state_rate
@@ -274,7 +274,7 @@ if uploaded_file:
                             overpaid = subject_tax - assessed
                             worksheet.write(row, status_col + 1, safe_excel_value(overpaid), currency2)
                         else:
-                            worksheet.write(row, status_col + 1, 0, currency2)
+                            worksheet.write(row, status_col + 1, "", border)  # leave blank if less than 2 matches
 
                         col = status_col + 2
                         for r in range(max_matches):
@@ -328,4 +328,5 @@ if uploaded_file:
             file_name="comparison_results_streamlit.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
 
