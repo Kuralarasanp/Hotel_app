@@ -268,6 +268,8 @@ if uploaded_file:
                         # ---- OverPaid calculation only if matches >= 2 ----
                         if len(matches) >= 2:
                             median_vpr = selected["2024 VPR"].head(3).median()
+                            if pd.isna(median_vpr):  # if all values are NaN
+                                median_vpr = 0
                             state_rate = get_state_tax_rate(base["State"])
                             assessed = median_vpr * rooms * state_rate
                             subject_tax = mv * state_rate
@@ -328,5 +330,6 @@ if uploaded_file:
             file_name="comparison_results_streamlit.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
 
 
